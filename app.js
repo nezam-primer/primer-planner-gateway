@@ -15,6 +15,15 @@ let targetsFetchedAt=0;
 
 function validTarget(u){return /^https:\/\/[a-z0-9]+\.app\.lhr\.life\/?$/i.test(String(u||''))}
 function normalizeTarget(u){return String(u||'').replace(/\/$/,'')}
+const bootParams=new URLSearchParams(location.search);
+const bootTargets=[bootParams.get('a'),bootParams.get('b')].map(normalizeTarget).filter(validTarget);
+try{
+ const cached=JSON.parse(localStorage.getItem('primer_transport_targets_v1')||'null');
+ const cachedUrls=Array.isArray(cached?.urls)?cached.urls.map(normalizeTarget).filter(validTarget):[];
+ transportTargets=[...new Set([...bootTargets,...cachedUrls])];
+ preferredTarget=normalizeTarget(bootTargets[0]||cached?.preferred||transportTargets[0]||'');
+ if(transportTargets.length)targetsFetchedAt=Date.now();
+}catch{transportTargets=[...new Set(bootTargets)];preferredTarget=transportTargets[0]||'';if(transportTargets.length)targetsFetchedAt=Date.now()}
 async function refreshTargets(force=false){
  if(!stableUi)return [];
  if(!force&&transportTargets.length&&Date.now()-targetsFetchedAt<5000)return transportTargets;
@@ -24,26 +33,36 @@ async function refreshTargets(force=false){
  const urls=[...(Array.isArray(x.urls)?x.urls:[]),x.url].map(normalizeTarget).filter(validTarget);
  transportTargets=[...new Set(urls)];targetsFetchedAt=Date.now();
  if(!preferredTarget||!transportTargets.includes(preferredTarget))preferredTarget=transportTargets[0]||'';
+ try{localStorage.setItem('primer_transport_targets_v1',JSON.stringify({urls:transportTargets,preferred:preferredTarget,savedAt:Date.now()}))}catch{}
  return transportTargets;
 }
 async function transportFetch(path,opt={},requestId=''){
  if(!stableUi)return fetch(path,opt);
+ const attempt=async(base)=>{
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),3500);
+  try{
+   const headers={...(opt.headers||{})};
+   if(requestId)headers['x-primer-request-id']=requestId;
+   const r=await fetch(base+path,{...opt,headers,signal:ctrl.signal,cache:'no-store'});
+   if([502,503,504].includes(r.status))throw new Error('HTTP_'+r.status);
+   return {r,base};
+  }finally{clearTimeout(timer)}
+ };
  const trySet=async(force=false)=>{
   const urls=await refreshTargets(force);
   const ordered=[preferredTarget,...urls].filter(Boolean).filter((u,i,a)=>a.indexOf(u)===i);
+  if(!ordered.length)throw new Error('BACKEND_UNAVAILABLE');
+  const method=String(opt.method||'GET').toUpperCase();
+  if(method==='GET'&&ordered.length>1){
+   const winner=await Promise.any(ordered.map(attempt));
+   preferredTarget=winner.base;
+   try{localStorage.setItem('primer_transport_targets_v1',JSON.stringify({urls:transportTargets,preferred:preferredTarget,savedAt:Date.now()}))}catch{}
+   return winner.r;
+  }
   let last=null;
   for(const base of ordered){
-   const ctrl=new AbortController();
-   const timer=setTimeout(()=>ctrl.abort(),4500);
-   try{
-    const headers={...(opt.headers||{})};
-    if(requestId)headers['x-primer-request-id']=requestId;
-    const r=await fetch(base+path,{...opt,headers,signal:ctrl.signal,cache:'no-store'});
-    if([502,503,504].includes(r.status)){last=new Error('HTTP_'+r.status);continue}
-    preferredTarget=base;
-    return r;
-   }catch(e){last=e}
-   finally{clearTimeout(timer)}
+   try{const x=await attempt(base);preferredTarget=x.base;return x.r}catch(e){last=e}
   }
   throw last||new Error('BACKEND_UNAVAILABLE');
  };
