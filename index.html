@@ -1,146 +1,41 @@
 <!doctype html>
 <html lang="fa" dir="rtl">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://gist.githubusercontent.com https://*.app.lhr.life; frame-src https://*.app.lhr.life; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PRIMER Planner</title>
-<style>
-html,body{margin:0;width:100%;height:100%;background:#0f1115;color:#f5f7fa;font-family:system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden}
-#app{position:fixed;inset:0;width:100%;height:100%;border:0;background:#0f1115}
-#overlay{position:fixed;inset:0;display:grid;place-items:center;background:#0f1115;z-index:2;transition:opacity .15s ease}
-#overlay.hidden{opacity:0;pointer-events:none}
-.card{max-width:28rem;padding:1.2rem 1.4rem;text-align:center}
-#status{margin:.5rem 0 0;opacity:.78;font-size:.92rem}
-#retry{margin-top:1rem;padding:.7rem 1rem;border:0;border-radius:.7rem;font:inherit}
-</style>
+<link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<iframe id="app" title="PRIMER Planner"></iframe>
-<div id="overlay"><div class="card"><strong>PRIMER Planner</strong><div id="status">در حال اتصال…</div><button id="retry" type="button" hidden>تلاش دوباره</button></div></div>
-<script>
-const TARGET_RAW='https://gist.githubusercontent.com/nezam-primer/d69a62e6102246fcdb5dd9675468051e/raw/primer-planner-target.json';
-const app=document.getElementById('app');
-const overlay=document.getElementById('overlay');
-const statusEl=document.getElementById('status');
-const retry=document.getElementById('retry');
-let currentTarget='';
-let readyTarget='';
-let knownTargets=[];
-let lastMountAt=0;
-let syncBusy=false;
-let mounted=false;
-
-try{window.Telegram?.WebApp?.ready?.();window.Telegram?.WebApp?.expand?.()}catch{}
-
-function validTarget(u){
-  return /^https:\/\/[a-z0-9]+\.app\.lhr\.life\/?$/i.test(String(u||''));
-}
-function normalizeTarget(u){return String(u||'').replace(/\/$/,'')}
-async function readTarget(){
-  const r=await fetch(TARGET_RAW+'?t='+Date.now(),{cache:'no-store'});
-  if(!r.ok)throw new Error('REGISTRY_HTTP_'+r.status);
-  const x=await r.json();
-  const raw=[...(Array.isArray(x.urls)?x.urls:[]),x.url].map(normalizeTarget).filter(validTarget);
-  const urls=[...new Set(raw)];
-  if(!urls.length)throw new Error('TARGET_MISSING');
-  return {...x,urls};
-}
-async function isHealthy(target){
-  if(!validTarget(target))return false;
-  const ctrl=new AbortController();
-  const timer=setTimeout(()=>ctrl.abort(),1400);
-  try{
-    const r=await fetch(normalizeTarget(target)+'/health?gateway='+Date.now(),{cache:'no-store',signal:ctrl.signal});
-    if(!r.ok)return false;
-    const h=await r.json();
-    return h?.ok===true&&h?.service==='PRIMER_PLANNER_STAGE';
-  }catch{return false}
-  finally{clearTimeout(timer)}
-}
-function childUrl(target){
-  return normalizeTarget(target)+'/'+location.search+location.hash;
-}
-function showRecovery(text='اتصال در حال بازیابی است…'){
-  overlay.classList.remove('hidden');
-  statusEl.textContent=text;
-  retry.hidden=true;
-}
-function mount(target,reason){
-  const normalized=normalizeTarget(target);
-  if(!validTarget(normalized))return;
-  currentTarget=normalized;
-  readyTarget='';
-  lastMountAt=Date.now();
-  mounted=true;
-  showRecovery(reason==='FAILOVER'?'در حال سوییچ به مسیر پشتیبان…':reason==='ROTATED'?'مسیر اتصال به‌روزرسانی شد…':'در حال اتصال…');
-  app.src=childUrl(normalized);
-}
-function alternateTarget(){
-  return knownTargets.find(u=>normalizeTarget(u)!==currentTarget)||'';
-}
-function failover(reason='FAILOVER'){
-  const alt=alternateTarget();
-  if(alt){mount(alt,reason);return true}
-  showRecovery();
-  return false;
-}
-retry.onclick=()=>{if(!failover('FAILOVER')&&currentTarget)mount(currentTarget,'RETRY')};
-
-window.addEventListener('message',e=>{
-  if(!/^https:\/\/[a-z0-9]+\.app\.lhr\.life$/i.test(e.origin))return;
-  if(!e.data)return;
-  const origin=normalizeTarget(e.origin);
-  if(origin!==currentTarget)return;
-  if(e.data.type==='PRIMER_BACKEND_FAULT'){
-    readyTarget='';
-    if(!failover('FAILOVER'))syncTarget(true);
-    return;
-  }
-  if(e.data.type!=='PRIMER_APP_READY')return;
-  readyTarget=origin;
-  overlay.classList.add('hidden');
-  statusEl.textContent='متصل';
-  retry.hidden=true;
-});
-
-async function syncTarget(forceHealth=false){
-  if(syncBusy)return;
-  syncBusy=true;
-  try{
-    const x=await readTarget();
-    knownTargets=x.urls;
-    if(!mounted){
-      mount(knownTargets[0],'INITIAL');
-      return;
-    }
-    if(!knownTargets.includes(currentTarget)){
-      mount(knownTargets[0],'ROTATED');
-      return;
-    }
-    const shouldProbe=forceHealth||Boolean(readyTarget)||Date.now()-lastMountAt>2500;
-    if(shouldProbe){
-      const ok=await isHealthy(currentTarget);
-      if(!ok){
-        const alt=alternateTarget();
-        if(alt){mount(alt,'FAILOVER');return}
-        showRecovery();
-        return;
-      }
-    }
-    if(!readyTarget&&Date.now()-lastMountAt>8000)mount(currentTarget,'RETRY');
-  }catch(e){
-    if(!mounted){
-      showRecovery('در حال بازیابی مسیر اتصال…');
-      retry.hidden=false;
-    }
-  }finally{
-    syncBusy=false;
-  }
-}
-syncTarget();
-setInterval(()=>syncTarget(false),2000);
-</script>
-</body>
-</html>
+<main>
+<header><div><small>PRIMER-owned</small><h1>Runtime Planner</h1></div><span id="mode">—</span></header>
+<section class="state card">
+<h2>STATE</h2>
+<form id="stateForm">
+<label>انرژی <input id="energy" type="number" min="0" max="10" value="5"></label>
+<label>استرس <input id="stress" type="number" min="0" max="10" value="5"></label>
+<label>مقاومت <input id="resistance" type="number" min="0" max="10" value="5"></label>
+<label>خواب <select id="sleep"><option>POOR</option><option selected>OK</option><option>GOOD</option></select></label>
+<button type="submit">ثبت State</button>
+</form>
+</section>
+<details class="card"><summary>Quick Add</summary>
+<form id="addForm" class="addform">
+<input id="taskTitle" placeholder="Task title" required>
+<input id="taskAction" placeholder="Smallest next action" required>
+<select id="taskLane"><option>REGULAR</option><option>ANCHOR</option><option>EXPOSURE</option><option>LEARNING</option><option>MAINTENANCE</option></select>
+<input id="taskMinutes" type="number" min="1" max="180" value="10">
+<label class="check"><input id="requiresAnchor" type="checkbox"> requires Anchor</label>
+<button type="submit">Add</button>
+</form></details>
+<section class="card suggestions"><div class="suggestions-head"><div><div class="eyebrow">CONTEXT INTELLIGENCE</div><h2>پیشنهاد برای الآن</h2></div><button id="refreshSuggestions" type="button">↻ تازه‌سازی</button></div><div id="suggestions">هنوز پیشنهادی نداریم.</div></section>
+<section class="card now"><div class="eyebrow">NOW</div><h2 id="nowTitle">—</h2><p id="nowAction">—</p><div id="nowMeta"></div>
+<div class="actions"><button id="start">▶ NOW</button><button id="done">✓ DONE</button><button id="stuck">STUCK</button><button id="return">↩ RETURN</button></div>
+<div class="secondary"><button id="checkpoint">Checkpoint</button><button id="stop">Stop</button></div>
+<div id="actionStatus" class="action-status" role="status" aria-live="polite">آماده</div>
+</section>
+<section class="grid"><div class="card"><div class="eyebrow">NEXT</div><div id="next">—</div></div><div class="card"><div class="eyebrow">LATER</div><div id="later">—</div></div></section>
+<section class="card"><div class="eyebrow">RUNTIME METRICS</div><div id="metrics" class="metrics"></div></section>
+<footer id="status">Local stage</footer>
+</main>
+<script type="module" src="./app.js?v=0.7.0-direct-broker"></script>
+</body></html>
