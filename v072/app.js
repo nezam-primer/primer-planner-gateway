@@ -12,6 +12,9 @@ const TARGET_RAW='https://gist.githubusercontent.com/nezam-primer/d69a62e6102246
 let transportTargets=[];
 let preferredTarget='';
 let targetsFetchedAt=0;
+const LOCAL_TARGET='http://127.0.0.1:19984';
+let localEnabled=false;
+let localPermissionState='unknown';
 
 function validTarget(u){
  const s=String(u||'');
@@ -26,8 +29,8 @@ try{
  const cachedUrls=Array.isArray(cached?.urls)?cached.urls.map(normalizeTarget).filter(validTarget):[];
  transportTargets=[...new Set([...bootTargets,...cachedUrls])];
  preferredTarget=normalizeTarget(bootTargets[0]||cached?.preferred||transportTargets[0]||'');
- if(transportTargets.length)targetsFetchedAt=Date.now();
-}catch{transportTargets=[...new Set(bootTargets)];preferredTarget=transportTargets[0]||'';if(transportTargets.length)targetsFetchedAt=Date.now()}
+ if(bootTargets.length)targetsFetchedAt=Date.now();
+}catch{transportTargets=[...new Set(bootTargets)];preferredTarget=transportTargets[0]||'';if(bootTargets.length)targetsFetchedAt=Date.now()}
 async function refreshTargets(force=false){
  if(!stableUi)return [];
  if(!force&&transportTargets.length&&Date.now()-targetsFetchedAt<5000)return transportTargets;
@@ -36,7 +39,7 @@ async function refreshTargets(force=false){
  const x=await r.json();
  const urls=[...(Array.isArray(x.urls)?x.urls:[]),x.url].map(normalizeTarget).filter(validTarget);
  transportTargets=[...new Set(urls)];targetsFetchedAt=Date.now();
- if(!preferredTarget||!transportTargets.includes(preferredTarget))preferredTarget=transportTargets[0]||'';
+ if(!preferredTarget||(preferredTarget!==LOCAL_TARGET&&!transportTargets.includes(preferredTarget)))preferredTarget=transportTargets[0]||'';
  try{localStorage.setItem('primer_transport_targets_v1',JSON.stringify({urls:transportTargets,preferred:preferredTarget,savedAt:Date.now()}))}catch{}
  return transportTargets;
 }
@@ -45,20 +48,23 @@ async function transportFetch(path,opt={},requestId=''){
  const attempt=async(base)=>{
   const ctrl=new AbortController();
   let host='';try{host=new URL(base).hostname}catch{}
-  const timeoutMs=/pinggy/i.test(host)?12000:4500;
+  const isLocal=base===LOCAL_TARGET;
+  const timeoutMs=isLocal?2200:(/pinggy/i.test(host)?12000:4500);
   const timer=setTimeout(()=>ctrl.abort(),timeoutMs);
   try{
    const headers={...(opt.headers||{})};
    if(requestId)headers['x-primer-request-id']=requestId;
    try{if(/pinggy/i.test(new URL(base).hostname))headers['x-pinggy-no-screen']='true'}catch{}
-   const r=await fetch(base+path,{...opt,headers,signal:ctrl.signal,cache:'no-store'});
+   const fetchOpt={...opt,headers,signal:ctrl.signal,cache:'no-store'};
+   if(isLocal)fetchOpt.targetAddressSpace='loopback';
+   const r=await fetch(base+path,fetchOpt);
    if([502,503,504].includes(r.status))throw new Error('HTTP_'+r.status);
    return {r,base};
   }finally{clearTimeout(timer)}
  };
  const trySet=async(force=false)=>{
-  const urls=await refreshTargets(force);
-  const ordered=[preferredTarget,...urls].filter(Boolean).filter((u,i,a)=>a.indexOf(u)===i);
+  const urls=await refreshTargets(force).catch(()=>transportTargets);
+  const ordered=[...(localEnabled?[LOCAL_TARGET]:[]),preferredTarget,...urls].filter(Boolean).filter((u,i,a)=>a.indexOf(u)===i);
   if(!ordered.length)throw new Error('BACKEND_UNAVAILABLE');
   const method=String(opt.method||'GET').toUpperCase();
   if(method==='GET'&&ordered.length>1){
@@ -81,6 +87,38 @@ function setFeedback(state,text){
  if(!el)return;
  el.dataset.state=state||'';
  el.textContent=text;
+}
+async function queryLoopbackPermission(){
+ if(!navigator.permissions?.query)return 'prompt';
+ try{return (await navigator.permissions.query({name:'loopback-network'})).state}catch{return 'prompt'}
+}
+function removeLocalConnectButton(){document.getElementById('localConnect')?.remove()}
+function ensureLocalConnectButton(){
+ if(document.getElementById('localConnect'))return;
+ const btn=document.createElement('button');
+ btn.id='localConnect';btn.type='button';btn.textContent='اتصال مستقیم به این لپ‌تاپ';
+ btn.style.marginTop='10px';btn.style.width='100%';
+ btn.onclick=async()=>{
+  btn.disabled=true;setFeedback('pending','در حال درخواست دسترسی مستقیم…');
+  try{
+   const headers={'content-type':'application/json'};
+   if(initData)headers['x-telegram-init-data']=initData;
+   const r=await fetch(LOCAL_TARGET+'/api/state',{headers,cache:'no-store',targetAddressSpace:'loopback'});
+   const x=await r.json().catch(()=>({}));
+   if(!r.ok||!x.ok)throw new Error(x.error||('HTTP_'+r.status));
+   localEnabled=true;localPermissionState='granted';preferredTarget=LOCAL_TARGET;
+   try{localStorage.setItem('primer_local_direct_v1','granted')}catch{}
+   render(x.state);removeLocalConnectButton();
+   setFeedback('success','اتصال مستقیم برقرار شد · event '+(x.state?.last_event_seq??'—'));
+   refreshSuggestionsRaw().catch(()=>{});
+  }catch(e){
+   localPermissionState='denied';
+   setFeedback('error','اتصال مستقیم مجاز نشد · اگر پیام دسترسی دیدی Allow را بزن');
+   btn.disabled=false;
+  }
+ };
+ const anchor=$('actionStatus');
+ (anchor?.parentElement||document.body).insertBefore(btn,anchor?.nextSibling||null);
 }
 function safeError(e){return String(e?.message||e||'UNKNOWN_ERROR').slice(0,120)}
 function probe(ui_action='',ui_phase='',ui_error=''){
@@ -268,6 +306,10 @@ $('stop').onclick=()=>runAction('Stop',()=>command('STOP',{reason:'MINIAPP_STOP'
 $('refreshSuggestions').onclick=()=>runAction('تازه‌سازی پیشنهادها',()=>refreshSuggestionsRaw());
 
 try{
+ localPermissionState=await queryLoopbackPermission();
+ if(localPermissionState==='granted'){
+  localEnabled=true;preferredTarget=LOCAL_TARGET;
+ }
  let x=await api('/api/state');render(x.state);
  try{window.parent?.postMessage?.({type:'PRIMER_APP_READY',version:'0.6.5-fast-recovery',last_event_seq:lastRenderedState?.last_event_seq??null},'*')}catch{}
  setFeedback('success','آماده · event '+(lastRenderedState?.last_event_seq??'—'));
@@ -281,6 +323,7 @@ try{
 }catch(e){
  const err=safeError(e);
  $('status').textContent='Error: '+err;
- setFeedback('error','شروع Mini App خطا: '+err);
+ setFeedback('error','اتصال عمومی در دسترس نیست؛ اتصال مستقیم را امتحان کن');
+ if(!localEnabled)ensureLocalConnectButton();
  probe('PAGE','ERROR',err);
 }
