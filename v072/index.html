@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PRIMER Planner</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main>
+<header><div><small>PRIMER-owned</small><h1>Runtime Planner</h1></div><span id="mode">—</span></header>
+<section class="state card">
+<h2>STATE</h2>
+<form id="stateForm">
+<label>انرژی <input id="energy" type="number" min="0" max="10" value="5"></label>
+<label>استرس <input id="stress" type="number" min="0" max="10" value="5"></label>
+<label>مقاومت <input id="resistance" type="number" min="0" max="10" value="5"></label>
+<label>خواب <select id="sleep"><option>POOR</option><option selected>OK</option><option>GOOD</option></select></label>
+<button type="submit">ثبت State</button>
+</form>
+</section>
+<details class="card"><summary>Quick Add</summary>
+<form id="addForm" class="addform">
+<input id="taskTitle" placeholder="Task title" required>
+<input id="taskAction" placeholder="Smallest next action" required>
+<select id="taskLane"><option>REGULAR</option><option>ANCHOR</option><option>EXPOSURE</option><option>LEARNING</option><option>MAINTENANCE</option></select>
+<input id="taskMinutes" type="number" min="1" max="180" value="10">
+<label class="check"><input id="requiresAnchor" type="checkbox"> requires Anchor</label>
+<button type="submit">Add</button>
+</form></details>
+<section class="card suggestions"><div class="suggestions-head"><div><div class="eyebrow">CONTEXT INTELLIGENCE</div><h2>پیشنهاد برای الآن</h2></div><button id="refreshSuggestions" type="button">↻ تازه‌سازی</button></div><div id="suggestions">هنوز پیشنهادی نداریم.</div></section>
+<section class="card now"><div class="eyebrow">NOW</div><h2 id="nowTitle">—</h2><p id="nowAction">—</p><div id="nowMeta"></div>
+<div class="actions"><button id="start">▶ NOW</button><button id="done">✓ DONE</button><button id="stuck">STUCK</button><button id="return">↩ RETURN</button></div>
+<div class="secondary"><button id="checkpoint">Checkpoint</button><button id="stop">Stop</button></div>
+<div id="actionStatus" class="action-status" role="status" aria-live="polite">آماده</div>
+</section>
+<section class="grid"><div class="card"><div class="eyebrow">NEXT</div><div id="next">—</div></div><div class="card"><div class="eyebrow">LATER</div><div id="later">—</div></div></section>
+<section class="card"><div class="eyebrow">RUNTIME METRICS</div><div id="metrics" class="metrics"></div></section>
+<footer id="status">Local stage</footer>
+</main>
+<script type="module" src="./app.js?v=0.7.2-pinggy"></script>
+</body></html>
