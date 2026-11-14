@@ -29,6 +29,7 @@ const retry=document.getElementById('retry');
 let currentTarget='';
 let readyTarget='';
 let lastMountAt=0;
+let faultedAt=0;
 let mounted=false;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
@@ -73,10 +74,24 @@ retry.onclick=reloadCurrent;
 
 window.addEventListener('message',e=>{
   if(!/^https:\/\/[a-z0-9]+\.app\.lhr\.life$/i.test(e.origin))return;
-  if(!e.data||e.data.type!=='PRIMER_APP_READY')return;
+  if(!e.data)return;
   const origin=e.origin.replace(/\/$/,'');
   if(origin!==currentTarget)return;
+  if(e.data.type==='PRIMER_BACKEND_FAULT'){
+    readyTarget='';
+    faultedAt=Date.now();
+    overlay.classList.remove('hidden');
+    statusEl.textContent='اتصال در حال بازیابی است…';
+    retry.hidden=true;
+    syncTarget();
+    setTimeout(syncTarget,750);
+    setTimeout(syncTarget,1500);
+    setTimeout(syncTarget,2500);
+    return;
+  }
+  if(e.data.type!=='PRIMER_APP_READY')return;
   readyTarget=origin;
+  faultedAt=0;
   overlay.classList.add('hidden');
   statusEl.textContent='متصل';
   retry.hidden=true;
@@ -88,6 +103,7 @@ async function syncTarget(){
     const next=x.url.replace(/\/$/,'');
     if(!mounted)mount(next,'INITIAL');
     else if(next!==currentTarget)mount(next,'ROTATED');
+    else if(faultedAt&&Date.now()-faultedAt>3000&&Date.now()-lastMountAt>3000)mount(next,'RETRY');
     else if(!readyTarget&&Date.now()-lastMountAt>9000)mount(next,'RETRY');
   }catch(e){
     if(!mounted){
@@ -98,7 +114,7 @@ async function syncTarget(){
   }
 }
 syncTarget();
-setInterval(syncTarget,3000);
+setInterval(syncTarget,2000);
 </script>
 </body>
 </html>
