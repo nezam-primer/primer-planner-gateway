@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src ''self''; connect-src https://api.github.com; script-src ''unsafe-inline''; style-src ''unsafe-inline''; img-src ''none''; object-src ''none''; base-uri ''none''; form-action ''none''">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.github.com; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>PRIMER Planner Gateway</title>
 <style>
 body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0f1115;color:#f5f7fa;display:grid;place-items:center;min-height:100vh;margin:0}
@@ -19,39 +19,39 @@ main{max-width:32rem;padding:2rem;text-align:center}.muted{opacity:.7;font-size:
 <button id="retry" hidden type="button">تلاش دوباره</button>
 </main>
 <script>
-const GIST=''d69a62e6102246fcdb5dd9675468051e'';
-const FILE=''primer-planner-target.json'';
-const statusEl=document.getElementById(''status'');
-const retryBtn=document.getElementById(''retry'');
+const GIST='d69a62e6102246fcdb5dd9675468051e';
+const FILE='primer-planner-target.json';
+const statusEl=document.getElementById('status');
+const retryBtn=document.getElementById('retry');
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function validTarget(u){
-  return /^https:\/\/[a-z0-9]+\.app\.lhr\.life\/?$/i.test(String(u||''''));
+  return /^https:\/\/[a-z0-9]+\.app\.lhr\.life\/?$/i.test(String(u||''));
 }
 async function readTarget(){
-  const r=await fetch(''https://api.github.com/gists/''+GIST+''?t=''+Date.now(),{cache:''no-store'',headers:{accept:''application/vnd.github+json''}});
-  if(!r.ok) throw new Error(''REGISTRY_HTTP_''+r.status);
+  const r=await fetch('https://api.github.com/gists/'+GIST+'?t='+Date.now(),{cache:'no-store',headers:{accept:'application/vnd.github+json'}});
+  if(!r.ok) throw new Error('REGISTRY_HTTP_'+r.status);
   const g=await r.json();
   const f=g.files?.[FILE]||Object.values(g.files||{})[0];
-  if(!f?.content) throw new Error(''TARGET_MISSING'');
+  if(!f?.content) throw new Error('TARGET_MISSING');
   const x=JSON.parse(f.content);
-  if(!validTarget(x.url)) throw new Error(''TARGET_INVALID'');
+  if(!validTarget(x.url)) throw new Error('TARGET_INVALID');
   return x;
 }
 async function boot(){
   retryBtn.hidden=true;
   for(let i=0;i<20;i++){
     try{
-      statusEl.textContent=''در حال اتصال به Planner…'';
+      statusEl.textContent='در حال اتصال به Planner…';
       const x=await readTarget();
-      const target=x.url.replace(/\/$/,'''')+''/'';
+      const target=x.url.replace(/\/$/,'')+'/';
       location.replace(target+location.search+location.hash);
       return;
     }catch(e){
-      statusEl.textContent=''در حال بازیابی مسیر اتصال…'';
+      statusEl.textContent='در حال بازیابی مسیر اتصال…';
       await sleep(Math.min(1000+i*250,3000));
     }
   }
-  statusEl.textContent=''اتصال خودکار هنوز آماده نشده است.'';
+  statusEl.textContent='اتصال خودکار هنوز آماده نشده است.';
   retryBtn.hidden=false;
 }
 retryBtn.onclick=boot;
