@@ -2,60 +2,103 @@
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.github.com; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-<title>PRIMER Planner Gateway</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.github.com; frame-src https://*.app.lhr.life; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>PRIMER Planner</title>
 <style>
-body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0f1115;color:#f5f7fa;display:grid;place-items:center;min-height:100vh;margin:0}
-main{max-width:32rem;padding:2rem;text-align:center}.muted{opacity:.7;font-size:.9rem}button{font:inherit;padding:.65rem 1rem;border:0;border-radius:.7rem}
+html,body{margin:0;width:100%;height:100%;background:#0f1115;color:#f5f7fa;font-family:system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden}
+#app{position:fixed;inset:0;width:100%;height:100%;border:0;background:#0f1115}
+#overlay{position:fixed;inset:0;display:grid;place-items:center;background:#0f1115;z-index:2;transition:opacity .18s ease}
+#overlay.hidden{opacity:0;pointer-events:none}
+.card{max-width:28rem;padding:1.2rem 1.4rem;text-align:center}
+#status{margin:.5rem 0 0;opacity:.78;font-size:.92rem}
+#retry{margin-top:1rem;padding:.7rem 1rem;border:0;border-radius:.7rem;font:inherit}
 </style>
 </head>
 <body>
-<main>
-<h1>PRIMER Planner</h1>
-<p id="status">در حال اتصال به Planner…</p>
-<p class="muted">آدرس پایدار؛ backend محلی به‌صورت خودکار پیدا می‌شود.</p>
-<button id="retry" hidden type="button">تلاش دوباره</button>
-</main>
+<iframe id="app" title="PRIMER Planner"></iframe>
+<div id="overlay"><div class="card"><strong>PRIMER Planner</strong><div id="status">در حال اتصال…</div><button id="retry" type="button" hidden>تلاش دوباره</button></div></div>
 <script>
 const GIST='d69a62e6102246fcdb5dd9675468051e';
 const FILE='primer-planner-target.json';
+const app=document.getElementById('app');
+const overlay=document.getElementById('overlay');
 const statusEl=document.getElementById('status');
-const retryBtn=document.getElementById('retry');
+const retry=document.getElementById('retry');
+let currentTarget='';
+let readyTarget='';
+let lastMountAt=0;
+let mounted=false;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+try{window.Telegram?.WebApp?.ready?.();window.Telegram?.WebApp?.expand?.()}catch{}
+
 function validTarget(u){
   return /^https:\/\/[a-z0-9]+\.app\.lhr\.life\/?$/i.test(String(u||''));
 }
 async function readTarget(){
-  const r=await fetch('https://api.github.com/gists/'+GIST+'?t='+Date.now(),{cache:'no-store',headers:{accept:'application/vnd.github+json'}});
-  if(!r.ok) throw new Error('REGISTRY_HTTP_'+r.status);
+  const r=await fetch('https://api.github.com/gists/'+GIST+'?t='+Date.now(),{
+    cache:'no-store',
+    headers:{accept:'application/vnd.github+json'}
+  });
+  if(!r.ok)throw new Error('REGISTRY_HTTP_'+r.status);
   const g=await r.json();
   const f=g.files?.[FILE]||Object.values(g.files||{})[0];
-  if(!f?.content) throw new Error('TARGET_MISSING');
+  if(!f?.content)throw new Error('TARGET_MISSING');
   const x=JSON.parse(f.content);
-  if(!validTarget(x.url)) throw new Error('TARGET_INVALID');
+  if(!validTarget(x.url))throw new Error('TARGET_INVALID');
   return x;
 }
-async function boot(){
-  retryBtn.hidden=true;
-  for(let i=0;i<20;i++){
-    try{
-      statusEl.textContent='در حال اتصال به Planner…';
-      const x=await readTarget();
-      const target=x.url.replace(/\/$/,'')+'/';
-      location.replace(target+location.search+location.hash);
-      return;
-    }catch(e){
+function childUrl(target){
+  const base=target.replace(/\/$/,'')+'/';
+  return base+location.search+location.hash;
+}
+function mount(target,reason){
+  const normalized=target.replace(/\/$/,'');
+  currentTarget=normalized;
+  readyTarget='';
+  lastMountAt=Date.now();
+  mounted=true;
+  overlay.classList.remove('hidden');
+  statusEl.textContent=reason==='ROTATED'?'مسیر اتصال به‌روزرسانی شد…':'در حال اتصال…';
+  retry.hidden=true;
+  app.src=childUrl(normalized);
+}
+function reloadCurrent(){
+  if(!currentTarget)return;
+  mount(currentTarget,'RETRY');
+}
+retry.onclick=reloadCurrent;
+
+window.addEventListener('message',e=>{
+  if(!/^https:\/\/[a-z0-9]+\.app\.lhr\.life$/i.test(e.origin))return;
+  if(!e.data||e.data.type!=='PRIMER_APP_READY')return;
+  const origin=e.origin.replace(/\/$/,'');
+  if(origin!==currentTarget)return;
+  readyTarget=origin;
+  overlay.classList.add('hidden');
+  statusEl.textContent='متصل';
+  retry.hidden=true;
+});
+
+async function syncTarget(){
+  try{
+    const x=await readTarget();
+    const next=x.url.replace(/\/$/,'');
+    if(!mounted)mount(next,'INITIAL');
+    else if(next!==currentTarget)mount(next,'ROTATED');
+    else if(!readyTarget&&Date.now()-lastMountAt>9000)mount(next,'RETRY');
+  }catch(e){
+    if(!mounted){
+      overlay.classList.remove('hidden');
       statusEl.textContent='در حال بازیابی مسیر اتصال…';
-      await sleep(Math.min(1000+i*250,3000));
+      retry.hidden=false;
     }
   }
-  statusEl.textContent='اتصال خودکار هنوز آماده نشده است.';
-  retryBtn.hidden=false;
 }
-retryBtn.onclick=boot;
-boot();
+syncTarget();
+setInterval(syncTarget,3000);
 </script>
 </body>
 </html>
