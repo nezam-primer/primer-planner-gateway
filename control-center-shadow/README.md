@@ -6,7 +6,21 @@ Read-only control-surface prototype for PRIMER.
 
 **The bundled `data.sample.json` is an explicit static example and MUST NOT be interpreted as current PRIMER status.**
 
-The UI now fails visibly into SAMPLE/UNKNOWN semantics unless a future authenticated canonical adapter explicitly marks the payload as live.
+The browser UI also keeps live rendering **disabled** even for a syntactically valid `meta.live=true` payload. A future change must integrate and verify an authenticated canonical adapter before enabling live rendering.
+
+## Data contract
+
+The pure browser-compatible `data-contract.mjs` validates required provenance and a bounded freshness window:
+- source pointer;
+- source version;
+- generated timestamp;
+- expiry timestamp;
+- current time inside the window with explicit 30-second skew;
+- owner, role and mission fields.
+
+Expired, future-generated, inverted-window, or provenance-missing live payloads fail closed.
+
+`validate-data.mjs` is only the CLI wrapper; the browser imports the same pure validator. Tests cover stale/future data and ensure shadow mode refuses live rendering by default.
 
 ## Purpose
 
@@ -26,9 +40,9 @@ Validate the information architecture for mission, owner, verification layers, o
 ## Live-data gate
 
 Shadow -> live Control Center requires:
-1. authenticated canonical data source,
+1. authenticated canonical data adapter,
 2. source provenance in every payload,
-3. freshness/staleness behavior,
+3. bounded freshness/staleness behavior,
 4. fail-closed UNKNOWN behavior,
 5. authentication and owner boundaries,
 6. consumer-path validation,
