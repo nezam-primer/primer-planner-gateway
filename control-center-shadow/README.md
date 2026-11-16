@@ -11,16 +11,18 @@ The browser UI also keeps live rendering **disabled** even for a syntactically v
 ## Data contract
 
 The pure browser-compatible `data-contract.mjs` validates required provenance and a bounded freshness window:
-- source pointer;
-- source version;
-- generated timestamp;
-- expiry timestamp;
+- payload source pointer and source version;
+- generated timestamp and expiry timestamp;
 - current time inside the window with explicit 30-second skew;
-- owner, role and mission fields.
+- owner, role and mission fields;
+- **claim-level provenance** for live mission/verification/gate/review/evidence rows;
+- each live claim provenance carries its own source pointer, source version and observed timestamp.
+
+This prevents one payload-level source from silently laundering unrelated PASS/OPEN claims. Claim observations generated in the future or after the payload snapshot fail closed.
 
 Expired, future-generated, inverted-window, or provenance-missing live payloads fail closed.
 
-`validate-data.mjs` is only the CLI wrapper; the browser imports the same pure validator. Tests cover stale/future data and ensure shadow mode refuses live rendering by default.
+`validate-data.mjs` is only the CLI wrapper; the browser imports the same pure validator. Tests cover stale/future data, claim-level provenance, and ensure shadow mode refuses live rendering by default.
 
 ## Purpose
 
@@ -41,7 +43,7 @@ Validate the information architecture for mission, owner, verification layers, o
 
 Shadow -> live Control Center requires:
 1. authenticated canonical data adapter,
-2. source provenance in every payload,
+2. payload and claim-level source provenance,
 3. bounded freshness/staleness behavior,
 4. fail-closed UNKNOWN behavior,
 5. authentication and owner boundaries,
