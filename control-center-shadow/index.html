@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PRIMER Control Center — Shadow</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main>
+<header>
+  <div><div class="eyebrow">PRIMER · SHADOW / READ-ONLY</div><h1>Control Center</h1></div>
+  <span id="freshness" class="pill">—</span>
+</header>
+<section id="summary" class="grid"></section>
+<section class="card">
+  <div class="section-head"><h2>Primary mission</h2><span id="missionState" class="pill">—</span></div>
+  <p id="missionText">—</p>
+  <div id="nextAction" class="next-action">—</div>
+</section>
+<section class="split">
+  <div class="card"><h2>Verification layers</h2><div id="verification"></div></div>
+  <div class="card"><h2>Open gates</h2><div id="gates"></div></div>
+</section>
+<section class="card"><h2>Review queue</h2><div id="reviews"></div></section>
+<section class="card"><h2>Evidence / receipts</h2><div id="evidence"></div></section>
+<footer>Read-only shadow surface · no deployment, approval, merge, or owner mutation controls.</footer>
+</main>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
