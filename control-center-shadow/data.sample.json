@@ -1,0 +1,31 @@
+{
+  "as_of": "2026-11-16",
+  "owner": "P-PRIMER",
+  "role": "EXECUTOR / COORDINATOR",
+  "s4": "0 / 6",
+  "useful_delta": "shadow only",
+  "mission": {
+    "status": "open",
+    "text": "Independent recovery plus real consumer validation remains the primary PRIMER mission. Engineering branches may progress without replacing that mission.",
+    "next_valid_action": "Run a fresh critical-state recovery with consumer verification and quantify recoverable data loss; keep device-two/full-disaster acceptance separate."
+  },
+  "verification": [
+    {"layer":"Implementation","detail":"Bounded candidate changes may be verified in isolated branches.","status":"pass"},
+    {"layer":"Regression","detail":"Exact-head CI/test evidence is tracked per PR; do not generalize across heads.","status":"pass"},
+    {"layer":"Consumer","detail":"Must prove a real consumer can use the recovered or changed state.","status":"open"},
+    {"layer":"Recovery","detail":"Same-device recovery is not device-two or full-disaster recovery.","status":"open"},
+    {"layer":"Independent verification","detail":"VIRA/VAKIL acceptance must be separately evidenced.","status":"open"}
+  ],
+  "gates": [
+    {"gate":"Owner release","detail":"No merge/deploy from shadow evidence alone.","status":"open"},
+    {"gate":"VIRA exact-head review","detail":"Independent review must target the current exact SHA.","status":"open"},
+    {"gate":"Device-two recovery","detail":"Requires explicit device access and scope.","status":"open"}
+  ],
+  "reviews": [
+    {"item":"PRIMER-Command-Bridge PR #42","detail":"Internal review found missing positive live-agent path test; PR remains draft.","status":"open","url":"https://github.com/nezam-primer/PRIMER-Command-Bridge/pull/42"}
+  ],
+  "evidence": [
+    {"item":"Plugin: primer-capnex-local v1.0.3","detail":"Operational Solution Engine skill added without write-capable tools.","status":"pass"},
+    {"item":"Control Center source","detail":"Read-only shadow surface; publication not claimed.","status":"pass"}
+  ]
+}
