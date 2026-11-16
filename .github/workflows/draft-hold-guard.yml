@@ -1,0 +1,22 @@
+name: Draft/HOLD promotion guard
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  semantic-hold:
+    if: >-
+      !github.event.pull_request.draft &&
+      (startsWith(github.event.pull_request.title, '[DRAFT]') ||
+       startsWith(github.event.pull_request.title, '[HOLD]'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Return semantically held PR to draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          echo "PR title still declares DRAFT/HOLD; returning it to draft."
+          gh pr ready --undo "$PR_URL"
