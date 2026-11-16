@@ -1,14 +1,42 @@
 name: Draft/HOLD promotion guard
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/draft-hold-guard.yml'
+      - '.github/scripts/draft_hold_decision.py'
+      - 'tests/test_draft_hold_decision.py'
   pull_request_target:
     types: [opened, reopened, synchronize, edited, ready_for_review]
+
 permissions:
   contents: read
-  pull-requests: write
+
 jobs:
-  semantic-hold:
+  decision-tests:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test semantic hold predicate
+        run: python -m unittest tests/test_draft_hold_decision.py -v
+
+  semantic-hold:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout trusted default-branch guard only
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
       - name: Recheck current PR state and return only a still-held PR to draft
         env:
           GH_TOKEN: ${{ github.token }}
@@ -19,12 +47,10 @@ jobs:
           current="$(gh pr view "$PR_URL" --json title,state,isDraft --jq '[.title,.state,.isDraft] | @tsv')"
           IFS=$'\t' read -r title state is_draft <<< "$current"
           echo "Current state=$state draft=$is_draft title=$title"
-          if [[ "$state" != "OPEN" || "$is_draft" == "true" ]]; then
-            echo "No mutation: PR is not an open ready PR."
-            exit 0
-          fi
-          if [[ "$title" != "[DRAFT]"* && "$title" != "[HOLD]"* ]]; then
-            echo "No mutation: current title no longer declares DRAFT/HOLD."
+          decision="$(python .github/scripts/draft_hold_decision.py \
+            --title "$title" --state "$state" --is-draft "$is_draft")"
+          if [[ "$decision" != "REDRAFT" ]]; then
+            echo "No mutation: decision=$decision"
             exit 0
           fi
           echo "Current PR still declares DRAFT/HOLD; returning it to draft."
