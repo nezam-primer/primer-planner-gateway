@@ -1,10 +1,32 @@
 # PRIMER Control Center — Shadow v0.1
 
-Read-only control surface for PRIMER operational state.
+Read-only control-surface prototype for PRIMER.
+
+## Critical status
+
+**The bundled `data.sample.json` is an explicit static example and MUST NOT be interpreted as current PRIMER status.**
+
+The browser UI also keeps live rendering **disabled** even for a syntactically valid `meta.live=true` payload. A future change must integrate and verify an authenticated canonical adapter before enabling live rendering.
+
+## Data contract
+
+The pure browser-compatible `data-contract.mjs` validates required provenance and a bounded freshness window:
+- payload source pointer and source version;
+- generated timestamp and expiry timestamp;
+- current time inside the window with explicit 30-second skew;
+- owner, role and mission fields;
+- **claim-level provenance** for live mission/verification/gate/review/evidence rows;
+- each live claim provenance carries its own source pointer, source version and observed timestamp.
+
+This prevents one payload-level source from silently laundering unrelated PASS/OPEN claims. Claim observations generated in the future or after the payload snapshot fail closed.
+
+Expired, future-generated, inverted-window, or provenance-missing live payloads fail closed.
+
+`validate-data.mjs` is only the CLI wrapper; the browser imports the same pure validator. Tests cover stale/future data, claim-level provenance, and ensure shadow mode refuses live rendering by default.
 
 ## Purpose
 
-Expose mission, owner, verification layers, open gates, review queue, and evidence without adding execution authority.
+Validate the information architecture for mission, owner, verification layers, open gates, review queue, and evidence without adding execution authority.
 
 ## Invariants
 
@@ -17,18 +39,16 @@ Expose mission, owner, verification layers, open gates, review queue, and eviden
 - CHECKPOINT != STOP.
 - No deploy, merge, approval, owner-change, or mutation controls exist in this shadow UI.
 
-## Data contract
+## Live-data gate
 
-The UI reads `data.sample.json` only. Production wiring is intentionally absent. A later Sites/MCP or canonical backend integration must preserve source provenance and freshness and must fail closed when status is unavailable.
+Shadow -> live Control Center requires:
+1. authenticated canonical data adapter,
+2. payload and claim-level source provenance,
+3. bounded freshness/staleness behavior,
+4. fail-closed UNKNOWN behavior,
+5. authentication and owner boundaries,
+6. consumer-path validation,
+7. independent review,
+8. explicit owner approval for any write-capable control.
 
-## Promotion gate
-
-Shadow -> live control center requires:
-1. canonical data source contract,
-2. freshness/staleness behavior,
-3. authentication and owner boundaries,
-4. consumer-path validation,
-5. independent review,
-6. explicit owner approval for any write-capable controls.
-
-This branch is safe to review without changing the existing Planner front door.
+Until then, this directory is a UI contract prototype only.
